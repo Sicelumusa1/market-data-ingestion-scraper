@@ -1,0 +1,11 @@
+[project]
+name = "market-data-ingestion-scraper"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "pandas>=2.3.3",
+    "selenium>=4.39.0",
+]
