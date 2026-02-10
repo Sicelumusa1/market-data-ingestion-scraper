@@ -1,0 +1,66 @@
+name: Market Data Scraper
+
+on:
+  schedule:
+    - cron: '0 10,11,12,13 * * 1-6'
+  workflow_dispatch:
+
+env:
+  TARGET_URL: ${{ secrets.TARGET_URL }}
+  GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      run: uv sync
+    
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v1
+      with:
+        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+    
+    - name: Create configuration
+      run: |
+        cat > .env << EOF
+        TARGET_URL=${{ secrets.TARGET_URL }}
+        GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }}
+        GCP_BUCKET_PATH=${{ secrets.GCP_BUCKET_PATH }}
+        GCP_UPLOAD_ENABLED=true
+        HEADLESS_MODE=true
+        SELENIUM_TIMEOUT=30
+        PAGE_LOAD_DELAY=1.5
+        EOF
+    
+    - name: Check date and scrape if new
+      run: |
+        uv run python github_date_checker.py
+        exit_code=$?
+        
+        if [ $exit_code -eq 1 ]; then
+          echo "New date found - running scraper"
+          uv run python main.py
+        elif [ $exit_code -eq 0 ]; then
+          echo "Date unchanged - skipping"
+        else
+          echo "Error: Date checker failed with code $exit_code"
+          exit $exit_code
+        fi
