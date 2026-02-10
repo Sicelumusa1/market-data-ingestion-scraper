@@ -19,8 +19,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
-      with:
-        token: ${{ github.token }}
     
     - name: Setup Python 3.12
       uses: actions/setup-python@v4
@@ -62,6 +60,21 @@ jobs:
         
         echo "Date checker exit code: $exit_code"
         
+        # FORCE KILL ALL Chrome processes and clean up
+        echo "Cleaning up Chrome processes..."
+        pkill -9 -f "chrome" || true
+        pkill -9 -f "chromedriver" || true
+        pkill -9 -f "Google Chrome" || true
+        pkill -9 -f "chromium" || true
+        
+        # Clean up Chrome user data directories
+        rm -rf /tmp/.com.google.Chrome* || true
+        rm -rf /tmp/.org.chromium* || true
+        rm -rf ~/.config/google-chrome || true
+        
+        # Wait for cleanup
+        sleep 3
+        
         if [ $exit_code -eq 1 ]; then
           echo "New date found - running scraper"
           uv run python main.py
@@ -71,6 +84,15 @@ jobs:
           echo "Error: Date checker failed with code $exit_code"
           exit $exit_code
         fi
+    
+    - name: Final Chrome cleanup
+      if: always()
+      run: |
+        echo "Running final Chrome cleanup..."
+        pkill -9 -f "chrome" || true
+        pkill -9 -f "chromedriver" || true
+        pkill -9 -f "Google Chrome" || true
+        rm -rf /tmp/.com.google.Chrome* || true
     
     - name: Commit and push generated files
       if: success()
