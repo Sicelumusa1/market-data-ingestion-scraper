@@ -1,15 +1,13 @@
 import os
+import logging
 from dotenv import load_dotenv
 
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-
-from scraper.date_scraper import scrape_date
-from scraper.form_handler import top_five
-from scraper.div_link_handler import handle_div_links_in_iframe
-
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 def main():
     load_dotenv()
@@ -17,47 +15,67 @@ def main():
     target_url = os.getenv("TARGET_URL")
     if not target_url:
         raise RuntimeError("TARGET_URL is not set")
-
-    # Use webdriver-manager
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.service import Service
-        from webdriver_manager.chrome import ChromeDriverManager
-    except ImportError:
-        raise ImportError("Please install webdriver-manager: pip install webdriver-manager")
-
-    options = Options()
-    options.add_argument("--start-maximized")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
     
-    # Use webdriver-manager with force download
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    wait = WebDriverWait(driver, 10)
-
+    driver = None
     try:
-        driver.get(target_url)
+        # Import date checker functions
+        from github_date_checker import (
+            check_date_with_driver, 
+            get_driver_for_scraping,
+            setup_chrome_driver
+        )
+        
+        # Step 1: Setup Chrome driver (using the same setup as date checker)
+        logger.info("Setting up Chrome driver...")
+        driver = setup_chrome_driver()
+        
+        # Check date with the existing driver
+        logger.info("Checking date...")
+        exit_code, current_date, should_scrape = check_date_with_driver(driver, target_url)
+        
+        if exit_code == 2:
+            # Error in date checking
+            raise RuntimeError("Date check failed")
+        
+        if not should_scrape:
+            logger.info("Date unchanged - exiting without scraping")
+            return  # Exit early if date hasn't changed
+        
+        # If we should scrape, reuse the same driver
+        logger.info("Date is new - continuing with scraping using the same Chrome session...")
+        
+        # Import scraping modules
+        from scraper.form_handler import top_five
+        from scraper.div_link_handler import handle_div_links_in_iframe
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.common.by import By
+        
+        # The driver is already on the page from date checking
+        # But ensure we're at the base URL (not in an iframe)
+        driver.switch_to.default_content()
         
         # Switch to the iframe
+        wait = WebDriverWait(driver, 10)
         iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, 'iframe')))
         driver.switch_to.frame(iframe)
-        
-        # Scrape the date
-        scrape_date(driver)
         
         # Handle the form submission and top five commodities
         top_five(driver, wait)
         
         # Handle clicking div > a links and scraping tables
         handle_div_links_in_iframe(driver, wait)
+        
+        logger.info("Scraping completed successfully")
+    
+    except Exception as e:
+        logger.error(f"Error during scraping: {e}")
+        raise
     
     finally:
-        driver.quit()
+        if driver:
+            driver.quit()
+            logger.info("Chrome driver closed")
 
 if __name__ == '__main__':
     main()
