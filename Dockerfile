@@ -27,9 +27,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install ChromeDriver
-RUN wget -O /tmp/chromedriver.zip https://storage.googleapis.com/chrome-for-testing-compatible/latest/linux64/chromedriver-linux64.zip \
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}') \
+    && DRIVER_VERSION=$(wget -qO- https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION%%.*}) \
+    && wget -O /tmp/chromedriver.zip https://storage.googleapis.com/chrome-for-testing-public/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip \
     && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip
+    && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm -rf /tmp/chromedriver.zip /usr/local/bin/chromedriver-linux64
 
 # Copy dependency files
 COPY pyproject.toml uv.lock .python-version ./
