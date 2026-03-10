@@ -231,159 +231,8 @@ def save_check_result(result_data):
     except Exception as e:
         logger.error(f"Error saving check result: {e}")
 
-# INTEGRATION WITH MAIN.PY
-
-
-def check_date_with_driver(driver, target_url):
-    """
-    Check if date has changed using an existing driver instance.
-    
-    Args:
-        driver: Existing Selenium WebDriver instance
-        target_url: URL to check
-        
-    Returns:
-        tuple: (exit_code, current_date, should_run_scraper)
-            exit_code: 0=unchanged, 1=new date, 2=error
-            current_date: The date scraped from website
-            should_run_scraper: True if main scraper should run
-    """
-    try:
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.common.by import By
-        
-        wait = WebDriverWait(driver, 20)
-        
-        # Navigate to URL
-        logger.info(f"Navigating to: {target_url}")
-        driver.get(target_url)
-        
-        # Wait for page to load
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        
-        # Try to switch to iframe
-        try:
-            iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, 'iframe')))
-            driver.switch_to.frame(iframe)
-            logger.info("Switched to iframe")
-        except:
-            logger.info("No iframe found, continuing with main page")
-        
-        # Try to import and use existing scrape_date function
-        current_date = None
-        try:
-            # Try to import from your scraper module
-            from scraper.date_scraper import scrape_date
-            current_date = scrape_date(driver)
-            if current_date:
-                logger.info(f"Used scraper.date_scraper: {current_date}")
-        except ImportError:
-            logger.warning("scraper.date_scraper not found, using fallback method")
-        
-        # If scrape_date didn't work or returned None, use fallback
-        if not current_date:
-            try:
-                # Fallback: Try to find date manually
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(driver.page_source, "html.parser")
-                right_div = soup.find("div", id="right2")
-                
-                if right_div:
-                    date_element = right_div.find("b")
-                    if date_element:
-                        current_date = date_element.get_text(strip=True)
-                        logger.info(f"Used fallback method: {current_date}")
-            except Exception as e:
-                logger.error(f"Fallback method failed: {e}")
-        
-        if not current_date:
-            logger.error("Failed to scrape date from website")
-            return 2, None, False
-        
-        logger.info(f"Current website date: {current_date}")
-        
-        # Switch back to default content for consistency
-        try:
-            driver.switch_to.default_content()
-        except:
-            pass
-        
-        # Get last stored date
-        last_date = read_last_date()
-        logger.info(f"Last stored date: {last_date or 'None (first run)'}")
-        
-        # Compare dates
-        is_new_date = compare_dates(last_date, current_date)
-        
-        # Prepare result
-        result = {
-            "timestamp": datetime.now().isoformat(),
-            "last_stored_date": last_date,
-            "current_website_date": current_date,
-            "is_new_date": is_new_date,
-            "action_required": is_new_date,
-            "message": ""
-        }
-        
-        if not last_date:
-            # First run
-            save_new_date(current_date)
-            result["message"] = f"First run - saved date: {current_date}"
-            result["action_required"] = True
-            logger.info(result["message"])
-            should_run_scraper = True
-            
-        elif is_new_date:
-            # New date found
-            save_new_date(current_date)
-            result["message"] = f"New date found: {current_date} (was: {last_date})"
-            logger.info(result["message"])
-            should_run_scraper = True
-            
-        else:
-            # Date unchanged
-            result["message"] = f"Date unchanged: {current_date}"
-            logger.info(result["message"])
-            should_run_scraper = False
-        
-        # Save result
-        save_check_result(result)
-        
-        # Show what will happen
-        print("\n" + "=" * 60)
-        if should_run_scraper:
-            print("RESULT: NEW DATE DETECTED")
-            print(f"   Last date:    {last_date or 'None'}")
-            print(f"   Current date: {current_date}")
-            print("   Action:       Continue with scraping")
-            print("=" * 60)
-            return 1, current_date, True
-        else:
-            print("RESULT: DATE UNCHANGED")
-            print(f"   Last date:    {last_date}")
-            print(f"   Current date: {current_date}")
-            print("   Action:       Exiting without scraping")
-            print("=" * 60)
-            return 0, current_date, False
-            
-    except Exception as e:
-        logger.error(f"Error in date check: {e}")
-        import traceback
-        traceback.print_exc()
-        return 2, None, False
-
-def get_driver_for_scraping():
-    """
-    Get a Chrome driver configured for scraping.
-    This uses the same setup as the date checker.
-    """
-    return setup_chrome_driver()
-
-# ORIGINAL MAIN FUNCTION (for standalone use)
-
 def main():
-    """Main function for standalone date checker."""
+    """Main function for GitHub Actions."""
     logger.info("=" * 60)
     logger.info("GitHub Actions Date Checker")
     logger.info("=" * 60)
@@ -439,7 +288,7 @@ def main():
             # First run
             save_new_date(current_date)
             result["message"] = f"First run - saved date: {current_date}"
-            result["action_required"] = True  # Always run on first execution
+            result["action_required"] = True  
             logger.info(result["message"])
             
         elif is_new_date:
