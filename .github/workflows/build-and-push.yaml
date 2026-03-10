@@ -2,28 +2,28 @@ name: Build and Push Scraper Image
 
 on:
   push:
-    branches: [ master, dev ]
+    branches: [master, dev]
     paths:
-      - 'Dockerfile'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.python-version'
-      - 'scraper/**'
-      - '*.py'
-      - '.github/workflows/build-and-push.yml'
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "scraper/**"
+      - "*.py"
+      - ".github/workflows/build-and-push.yml"
   pull_request:
-    branches: [ master ]
+    branches: [master]
     paths:
-      - 'Dockerfile'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.python-version'
-      - 'scraper/**'
-      - '*.py'
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "scraper/**"
+      - "*.py"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Image tag to build'
+        description: "Image tag to build"
         required: false
         type: string
 
@@ -55,11 +55,11 @@ jobs:
     permissions:
       contents: write # Needed for Release
       id-token: write # Needed for GCP WIF
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Generate image tag
         id: tag
         shell: bash
@@ -71,17 +71,25 @@ jobs:
           else
             echo "tag=${{ github.ref_name }}-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
           token_format: access_token
-      
+
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-      
+
+      - name: Set up QEMU (for multi-platform builds)
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver: docker-container
+
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
